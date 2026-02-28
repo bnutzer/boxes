@@ -207,6 +207,33 @@ def argparseSections(s):
 
     return result
 
+def argparseInts(s):
+    """
+    Parse sections parameter
+
+    :param s: string to parse
+    """
+
+    result = []
+
+    s = re.split(r"\s|:", s)
+
+    try:
+        for part in s:
+            m = re.match(r"^(\d+\*(\d+))$", part)
+            if m:
+                n = int(m.group(1))
+                result.extend([int(m.group(1))] * n)
+                continue
+            result.append(int(part))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Don't understand list of ints")
+
+    if not result:
+        result.append(0)
+
+    return result
+
 class ArgparseEdgeType:
     """argparse type to select from a set of edge types"""
 
@@ -356,21 +383,12 @@ class Boxes:
             "--thickness", action="store", type=float, default=3.0,
             help="thickness of the material (in mm) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#thickness)")
         defaultgroup.add_argument(
-            "--output", action="store", type=str, default="box.svg",
-            help="name of resulting file")
+            "--burn", action="store", type=float, default=0.1,
+            help='burn correction (in mm)(bigger values for tighter fit) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#burn)')
         defaultgroup.add_argument(
             "--format", action="store", type=str, default="svg",
             choices=self.formats.getFormats(),
             help="format of resulting file [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#format)")
-        defaultgroup.add_argument(
-            "--tabs", action="store", type=float, default=0.0,
-            help="width of tabs holding the parts in place (in mm)(not supported everywhere) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#tabs)")
-        defaultgroup.add_argument(
-            "--qr_code", action="store", type=boolarg, default=False,
-            help="Add a QR Code with link or command line to the generated output")
-        defaultgroup.add_argument(
-            "--debug", action="store", type=boolarg, default=False,
-            help="print surrounding boxes for some structures [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#debug)")
         defaultgroup.add_argument(
             "--labels", action="store", type=boolarg, default=True,
             help="label the parts (where available)")
@@ -378,12 +396,18 @@ class Boxes:
             "--reference", action="store", type=float, default=100.0,
             help="print reference rectangle with given length (in mm)(zero to disable) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#reference)")
         defaultgroup.add_argument(
+            "--tabs", action="store", type=float, default=0.0,
+            help="width of tabs holding the parts in place (in mm)(not supported everywhere) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#tabs)")
+        defaultgroup.add_argument(
+            "--qr_code", action="store", type=boolarg, default=False,
+            help="Add a QR Code with link or command line to the generated output")
+        defaultgroup.add_argument(
             "--inner_corners", action="store", type=str, default="loop",
             choices=["loop", "corner", "backarc"],
             help="style for inner corners [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#inner-corners)")
         defaultgroup.add_argument(
-            "--burn", action="store", type=float, default=0.1,
-            help='burn correction (in mm)(bigger values for tighter fit) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#burn)')
+            "--output", action="store", type=str, default="box.svg",
+            help="name of resulting file")
         def spacing_type(x):
             try:
                 return (float(x), 0.)
@@ -392,6 +416,9 @@ class Boxes:
         defaultgroup.add_argument(
             "--spacing", action="store", type=spacing_type, default="0.5",
             help='spacing around parts (multiples of thickness [: extra space in mm]) [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#spacing)')
+        defaultgroup.add_argument(
+            "--debug", action="store", type=boolarg, default=False,
+            help="print surrounding boxes for some structures [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#debug)")
 
     @contextmanager
     def saved_context(self):
@@ -478,6 +505,7 @@ class Boxes:
         * floats: x, y, h, hi
         * argparseSections: sx, sy, sh
         * ArgparseEdgeType: bottom_edge, top_edge
+          * pass default as single char or choices as string (first is default)
         * boolarg: outside
         * str (selection): nema_mount
         """
@@ -537,17 +565,25 @@ class Boxes:
                     "--hole_dD", action="store", type=argparseSections, default=default,
                     help="mounting hole diameter (shaft:head) in mm [\U0001F6C8](https://florianfesti.github.io/boxes/html/usermanual.html#mounting-holes)")
             elif arg == "bottom_edge":
+                choices = "Fhse"
                 if default is None: default = "h"
+                if len(default) > 1:
+                    choices = default
+                    default = choices[0]
                 self.argparser.add_argument(
                     "--bottom_edge", action="store",
-                    type=ArgparseEdgeType("Fhse"), choices=list("Fhse"),
+                    type=ArgparseEdgeType(choices), choices=list(choices),
                     default=default,
                     help="edge type for bottom edge")
             elif arg == "top_edge":
+                choices = "efFhcESŠikvLtGyY"
                 if default is None: default = "e"
+                if len(default) > 1:
+                    choices = default
+                    default = choices[0]
                 self.argparser.add_argument(
                     "--top_edge", action="store",
-                    type=ArgparseEdgeType("efFhcESŠikvLtGyY"), choices=list("efFhcESŠikvfLtGyY"),
+                    type=ArgparseEdgeType(choices), choices=list(choices),
                     default=default, help="edge type for top edge")
             elif arg == "outside":
                 if default is None: default = True
@@ -558,7 +594,7 @@ class Boxes:
                 if default is None: default = 23
                 self.argparser.add_argument(
                     "--nema_mount", action="store",
-                    type=int, choices=list(sorted(self.nema_sizes.keys())),
+                    type=int, choices=sorted(self.nema_sizes.keys()),
                     default=default, help="NEMA size of motor")
             else:
                 raise ValueError("No default for argument", arg)
@@ -708,12 +744,12 @@ class Boxes:
             walls = 0
 
         if isinstance(e1, edges.BaseEdge):
-            walls += e1.startwidth() + e1.margin()
+            walls += e1.startWidth() + e1.margin()
         elif e1:
             walls += self.thickness
 
         if isinstance(e2, edges.BaseEdge):
-            walls += e2.startwidth() + e2.margin()
+            walls += e2.startWidth() + e2.margin()
         elif e2:
             walls += self.thickness
 
@@ -976,9 +1012,9 @@ class Boxes:
         edge1 = self.edges.get(edge1, edge1)
         edge2 = self.edges.get(edge2, edge2)
 
-        self.edge(edge2.startwidth() * math.tan(math.radians(angle/2.)))
+        self.edge(edge2.startWidth() * math.tan(math.radians(angle/2.)))
         self.corner(angle)
-        self.edge(edge1.endwidth() * math.tan(math.radians(angle/2.)))
+        self.edge(edge1.endWidth() * math.tan(math.radians(angle/2.)))
 
     def regularPolygon(self, corners=3, radius=None, h=None, side=None):
         """Give measures of a regular polygon
@@ -1055,10 +1091,10 @@ class Boxes:
 
 
         if hole:
-            self.hole(side/2., h+edges[0].startwidth() + self.burn, hole/2.)
-        self.cc(callback, 0, side/2., h+edges[0].startwidth() + self.burn)
+            self.hole(side/2., h+edges[0].startWidth() + self.burn, hole/2.)
+        self.cc(callback, 0, side/2., h+edges[0].startWidth() + self.burn)
         for i in range(corners):
-            self.cc(callback, i+1, 0, edges[i].startwidth() + self.burn)
+            self.cc(callback, i+1, 0, edges[i].startWidth() + self.burn)
             edges[i](side)
             self.edgeCorner(edges[i], edges[i+1], 360.0/corners)
 
@@ -1244,10 +1280,11 @@ class Boxes:
 
         if not before:
             # restore position
+            self.ctx.stroke()
             self.ctx.restore()
             if self.labels and label:
                 self.text(label, x/2, y/2, align="middle center", color=Color.ANNOTATIONS, fontsize=4)
-            self.ctx.stroke()
+                self.ctx.stroke()
 
         for term in terms:
             if not term in moves:
@@ -2250,13 +2287,13 @@ class Boxes:
         for nr, l in enumerate((lx, ly, lx, ly)):
             if self._splitWall(wallpieces, nr):
                 for i in range(2):
-                    self.cc(callback, wallcount, y=edge.startwidth()+self.burn)
+                    self.cc(callback, wallcount, y=edge.startWidth()+self.burn)
                     edge(l / 2.0 ,
                          bedBolts=self.getEntry(bedBolts, wallcount),
                          bedBoltSettings=self.getEntry(bedBoltSettings, wallcount))
                     wallcount += 1
             else:
-                self.cc(callback, wallcount, y=edge.startwidth()+self.burn)
+                self.cc(callback, wallcount, y=edge.startWidth()+self.burn)
                 edge(l,
                      bedBolts=self.getEntry(bedBolts, wallcount),
                      bedBoltSettings=self.getEntry(bedBoltSettings, wallcount))
@@ -2264,15 +2301,15 @@ class Boxes:
             if extend_corners:
                 if corner_holes:
                     with self.saved_context():
-                        self.moveTo(0, edge.startwidth())
+                        self.moveTo(0, edge.startWidth())
                         self.polyline(0, (90, r), 0, -90, t, -90, 0,
                                       (-90, r+t), 0, -90, t, -90, 0,)
                         self.ctx.stroke()
-                self.corner(90, r + edge.startwidth())
+                self.corner(90, r + edge.startWidth())
             else:
-                self.step(-edge.endwidth())
+                self.step(-edge.endWidth())
                 self.corner(90, r)
-                self.step(edge.startwidth())
+                self.step(edge.startWidth())
 
         self.ctx.restore()
         self.ctx.save()
@@ -2358,13 +2395,13 @@ class Boxes:
         left = self.edges.get(left, left)
         right = self.edges.get(right, right)
 
-        # XXX assumes startwidth == endwidth
+        # XXX assumes startWidth == endWidth
         if extend_corners:
             topwidth = t
             bottomwidth = t
         else:
-            topwidth = top.startwidth()
-            bottomwidth = bottom.startwidth()
+            topwidth = top.startWidth()
+            bottomwidth = bottom.startWidth()
 
         overallwidth = 2*x + 2*y - 8*r + 4*c4 + (self.edges["d"].spacing() + self.edges["D"].spacing() + self.spacing) * pieces
         overallheight = h + max(t, top.spacing()) + max(t, bottom.spacing())
@@ -2400,9 +2437,9 @@ class Boxes:
                     self.edgeCorner(right, top, 90)
                     for n, d in enumerate(reversed(tops)):
                         if n % 2: # flex
-                            self.step(topwidth-top.endwidth())
+                            self.step(topwidth-top.endWidth())
                             self.edge(d)
-                            self.step(top.startwidth()-topwidth)
+                            self.step(top.startWidth()-topwidth)
                         else:
                             top(d)
                     self.edgeCorner(top, left, 90)
@@ -2423,9 +2460,9 @@ class Boxes:
                 wallcount += 1
                 bottom(l)
                 tops.append(l)
-            self.step(bottomwidth-bottom.endwidth())
+            self.step(bottomwidth-bottom.endWidth())
             self.edges["X"](c4, h + topwidth + bottomwidth)
-            self.step(bottom.startwidth()-bottomwidth)
+            self.step(bottom.startWidth()-bottomwidth)
             tops.append(c4)
 
         self.move(overallwidth, overallheight, move)
@@ -2488,13 +2525,13 @@ class Boxes:
             self.moveTo(edges[-1].spacing())
         self.moveTo(0, edges[0].margin())
         for i, l in enumerate((x, y, x, y)):
-            self.cc(callback, i, y=edges[i].startwidth() + self.burn)
+            self.cc(callback, i, y=edges[i].startWidth() + self.burn)
             e1, e2 = edges[i], edges[i + 1]
             if (2*i-1 in ignore_widths or
                 2*i-1+8 in ignore_widths):
-                l += edges[i-1].endwidth()
+                l += edges[i-1].endWidth()
             if 2*i in ignore_widths:
-                l += edges[i+1].startwidth()
+                l += edges[i+1].startWidth()
                 e2 = self.edges["e"]
             if 2*i+1 in ignore_widths:
                 e1 = self.edges["e"]
@@ -2506,7 +2543,7 @@ class Boxes:
 
         if holesMargin is not None:
             self.moveTo(holesMargin,
-                        holesMargin + edges[0].startwidth())
+                        holesMargin + edges[0].startWidth())
             self.hexHolesRectangle(x - 2 * holesMargin, y - 2 * holesMargin, settings=holesSettings)
 
         self.move(overallwidth, overallheight, move, label=label)
@@ -2559,13 +2596,13 @@ class Boxes:
             self.cc(callback, i, x=-rl)
             if flanges[i]:
                 if edges[i] is self.edges["F"] or edges[i] is self.edges["h"]:
-                    self.fingerHolesAt(flanges[i-1]+edges[i-1].endwidth()-rl, 0.5*t+flanges[i], l,
+                    self.fingerHolesAt(flanges[i-1]+edges[i-1].endWidth()-rl, 0.5*t+flanges[i], l,
                                        angle=0)
-                self.edge(l+flanges[i-1]+flanges[i+1]+edges[i-1].endwidth()+edges[i+1].startwidth()-rl-rr)
+                self.edge(l+flanges[i-1]+flanges[i+1]+edges[i-1].endWidth()+edges[i+1].startWidth()-rl-rr)
             else:
-                self.edge(flanges[i-1]+edges[i-1].endwidth()-rl)
+                self.edge(flanges[i-1]+edges[i-1].endWidth()-rl)
                 edges[i](l)
-                self.edge(flanges[i+1]+edges[i+1].startwidth()-rr)
+                self.edge(flanges[i+1]+edges[i+1].startWidth()-rr)
             self.corner(90, rr)
         self.move(tw, th, move, label=label)
 
@@ -2594,6 +2631,9 @@ class Boxes:
         if len(edges) != 3:
             raise ValueError("two or three edges required")
 
+        if num <= 0:
+            return
+
         r = min(r, x, y)
         a = math.atan2(y-r, float(x-r))
         alpha = math.degrees(a)
@@ -2620,7 +2660,7 @@ class Boxes:
 
         for n in range(num):
             for i, l in enumerate((x, y)):
-                self.cc(callback, i, y=edges[i].startwidth() + self.burn)
+                self.cc(callback, i, y=edges[i].startWidth() + self.burn)
                 edges[i](l,
                          bedBolts=self.getEntry(bedBolts, i),
                          bedBoltSettings=self.getEntry(bedBoltSettings, i))
@@ -2630,11 +2670,11 @@ class Boxes:
 
             self.corner(alpha, r)
             self.cc(callback, 2)
-            self.step(edges[2].startwidth())
+            self.step(edges[2].startWidth())
             edges[2](((x-r)**2+(y-r)**2)**0.5)
-            self.step(-edges[2].endwidth())
+            self.step(-edges[2].endWidth())
             self.corner(90-alpha, r)
-            self.edge(edges[0].startwidth())
+            self.edge(edges[0].startWidth())
             self.corner(90)
             self.ctx.stroke()
 
@@ -2662,7 +2702,7 @@ class Boxes:
         edges = [self.edges.get(e, e) for e in edges]
 
         overallwidth = w + edges[-1].spacing() + edges[1].spacing()
-        overallheight = max(h0, h1) + edges[0].spacing()
+        overallheight = max(h0, h1) + edges[0].spacing() + edges[2].spacing()
 
         if self.move(overallwidth, overallheight, move, before=True):
             return
@@ -2671,10 +2711,10 @@ class Boxes:
         l = ((h0-h1)**2+w**2)**0.5
 
         self.moveTo(edges[-1].spacing(), edges[0].margin())
-        self.cc(callback, 0, y=edges[0].startwidth())
+        self.cc(callback, 0, y=edges[0].startWidth())
         edges[0](w)
         self.edgeCorner(edges[0], edges[1], 90)
-        self.cc(callback, 1, y=edges[1].startwidth())
+        self.cc(callback, 1, y=edges[1].startWidth())
         edges[1](h1)
         self.edgeCorner(edges[1], self.edges["e"], 90)
         self.corner(a)
@@ -2682,7 +2722,7 @@ class Boxes:
         edges[2](l)
         self.corner(-a)
         self.edgeCorner(self.edges["e"], edges[-1], 90)
-        self.cc(callback, 3, y=edges[-1].startwidth())
+        self.cc(callback, 3, y=edges[-1].startWidth())
         edges[3](h0)
         self.edgeCorner(edges[-1], edges[0], 90)
 
@@ -2715,31 +2755,31 @@ class Boxes:
         r = min(radius, abs(h0-h1))
         ws = w-r
         if h0 > h1:
-            ws += edges[1].endwidth()
+            ws += edges[1].endWidth()
         else:
-            ws += edges[3].startwidth()
+            ws += edges[3].startWidth()
         hs = abs(h1-h0) - r
         a = math.degrees(math.atan(hs/ws))
         l = (ws**2+hs**2)**0.5
 
         self.moveTo(edges[-1].spacing(), edges[0].margin())
-        self.cc(callback, 0, y=edges[0].startwidth())
+        self.cc(callback, 0, y=edges[0].startWidth())
         edges[0](w)
         self.edgeCorner(edges[0], edges[1], 90)
-        self.cc(callback, 1, y=edges[1].startwidth())
+        self.cc(callback, 1, y=edges[1].startWidth())
         edges[1](h1)
 
         if h0 > h1:
             self.polyline(0, (90-a, r))
             self.cc(callback, 2)
             edges[2](l)
-            self.polyline(0, (a, r), edges[3].startwidth(), 90)
+            self.polyline(0, (a, r), edges[3].startWidth(), 90)
         else:
-            self.polyline(0, 90, edges[1].endwidth(), (a, r))
+            self.polyline(0, 90, edges[1].endWidth(), (a, r))
             self.cc(callback, 2)
             edges[2](l)
             self.polyline(0, (90-a, r))
-        self.cc(callback, 3, y=edges[-1].startwidth())
+        self.cc(callback, 3, y=edges[-1].startWidth())
         edges[3](h0)
         self.edgeCorner(edges[-1], edges[0], 90)
 
@@ -2792,10 +2832,10 @@ class Boxes:
 
                 for direction in (0, 90, 180, 270):
                     if (a > 0 and
-                        angle <= direction and (angle + a) % 360 >= direction):
+                        angle <= direction and (angle + a) >= direction):
                         direction -= 90
                     elif (a < 0 and
-                          angle >= direction and (angle + a) % 360 <= direction):
+                          angle >= direction and (angle + a) <= direction):
                         direction -= 90
                     else:
                         continue

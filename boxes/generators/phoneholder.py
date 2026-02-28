@@ -62,7 +62,7 @@ class PhoneHolder(Boxes):
             "--angle",
             type=float,
             default=25,
-            help="angle at which the phone stands, in degrees. 0° is vertical.",
+            help="angle at which the phone stands, in degrees. 0° is vertical.",
         )
         self.argparser.add_argument(
             "--bottom_margin",
@@ -264,7 +264,7 @@ class SideEdge(edges.BaseEdge):
         self.polyline(0, -90, self.thickness, 90)
         self.edges["F"](tab_end)
 
-    def startwidth(self) -> float:
+    def startWidth(self) -> float:
         return self.boxes.thickness
 
 

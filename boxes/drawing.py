@@ -358,7 +358,7 @@ class Context:
 
     def fill(self):
         self._xy = (0, 0)
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def set_font(self, style, bold=False, italic=False):
         if style not in ("serif", "sans-serif", "monospaced"):
@@ -564,6 +564,7 @@ class SVGSurface(Surface):
                         t.set("font-size", f"{params['fs']}px")
                         t.set("text-anchor", params.get('align', 'left'))
                         t.set("dominant-baseline", 'hanging')
+                        t.tail = "\n  "
                     else:
                         print("Unknown", c)
 

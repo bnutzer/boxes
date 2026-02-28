@@ -12,6 +12,7 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from pathlib import Path
 
 from boxes import *
 from boxes import Color, edges
@@ -81,7 +82,7 @@ class TypeTray(_TopEdge):
             "--gripheight", action="store", type=float, default=30,
             dest="gh", help="height of the grip hole in mm")
         self.argparser.add_argument(
-            "--gripwidth", action="store", type=float, default=70,
+            "--gripwidth", action="store", type=float, default=0,
             dest="gw", help="width of th grip hole in mm (zero for no hole)")
         self.argparser.add_argument(
             "--handle", type=boolarg, default=False, help="add handle to the bottom (changes bottom edge in the front)")
@@ -243,7 +244,7 @@ class TypeTray(_TopEdge):
             self.textcontent = self.label_text.split("\r\n")
         else:
             if self.label_file:
-                with open(self.label_file) as f:
+                with Path(self.label_file).open() as f:
                     self.textcontent = f.readlines()
         self.textnumber = 0
 
@@ -260,10 +261,10 @@ class TypeTray(_TopEdge):
 
         # front
         if self.text_at_front:
-            frontCBs = [lambda:(self.textCB(), self.mirrorX(self.xHoles, x)()),
+            frontCBs = [lambda:(self.textCB(), self.xHoles()),
                         None, self.gripHole]
         else:
-            frontCBs = [self.mirrorX(self.xHoles, x), None, self.gripHole]
+            frontCBs = [self.xHoles, None, self.gripHole]
 
         # finger holes at front wall
         if not self.closedtop and \
@@ -305,18 +306,18 @@ class TypeTray(_TopEdge):
         # finger holes at back wall
         if not self.closedtop and \
            self.fingerholes in ("back", "front-and-back"):
-            tb = edges.SlottedEdge(self, self.sx, "A")
+            tb = edges.SlottedEdge(self, self.sx[::-1], "A")
 
         if bh:
             self.rectangularWall(x, h+bh, [b, "f", tb, "f"],
                                  callback=[self.xHoles],
                                  ignore_widths=[],
-                                 move="up", label="back")
+                                 move="mirror up", label="back")
         else:
             self.rectangularWall(x, h, [b, "F", tb, "F"],
                                  callback=[self.xHoles],
                                  ignore_widths=ignore_widths,
-                                 move="up", label="back")
+                                 move="mirror up", label="back")
 
         # top / lid
         if self.closedtop and sameh:
